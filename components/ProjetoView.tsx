@@ -2,14 +2,15 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { brl, calc, hoje, n } from "@/lib/calc";
-import type { Lancamento, Projeto } from "@/lib/types";
+import type { Custo, Lancamento, Projeto } from "@/lib/types";
 
 const TIPO_L = { assinatura: "Assinatura mensal", custo: "Custo único", receita: "Recebimento" };
 
-type Props = { p: Projeto; L: Lancamento[]; usd: number; voltar: () => void; recarregar: () => Promise<void> };
+type Props = { p: Projeto; L: Lancamento[]; C: Custo[]; usd: number; voltar: () => void; recarregar: () => Promise<void> };
 
-export default function ProjetoView({ p, L, usd, voltar, recarregar }: Props) {
-  const c = calc(p, L, usd);
+export default function ProjetoView({ p, L, C, usd, voltar, recarregar }: Props) {
+  const c = calc(p, L, usd, C);
+  const rateados = C.filter((k) => k.ativo && k.rateio.some((r) => r.projeto_id === p.id));
   const [confirma, setConfirma] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -42,12 +43,12 @@ export default function ProjetoView({ p, L, usd, voltar, recarregar }: Props) {
 
   async function addLanc(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const f = new FormData(e.currentTarget);
+    const form = e.currentTarget, f = new FormData(form);
     const { error } = await supabase.from("lancamentos").insert({
       projeto_id: p.id, tipo: f.get("tipo"), descricao: String(f.get("descricao")).trim(),
       moeda: f.get("moeda"), valor: n(f.get("valor")), data: f.get("data") || hoje(),
     });
-    if (!error) e.currentTarget.reset();
+    if (!error) form.reset();
     aviso(error ? "Erro: " + error.message : "Lançamento adicionado");
     await recarregar();
   }
@@ -105,7 +106,7 @@ export default function ProjetoView({ p, L, usd, voltar, recarregar }: Props) {
           <div className="grid gap-1.5 border-t border-dashed border-[#dbe2e0] pt-2.5 text-sm">
             <Linha k="Mão de obra" v={brl(c.mo)} /><Linha k="Custos únicos" v={brl(c.cu)} />
             <Linha k="Preço do projeto" v={brl(c.preco)} big />
-            <Linha k="Assinaturas ativas" v={brl(c.cm) + "/mês"} />
+            <Linha k="Custos mensais rateados" v={brl(c.cm) + "/mês"} />
             <Linha k="Mensalidade a cobrar" v={brl(c.mensal) + "/mês"} big />
           </div>
           <div className="grid gap-1.5 border-t border-dashed border-[#dbe2e0] pt-2.5 text-sm">
@@ -118,8 +119,13 @@ export default function ProjetoView({ p, L, usd, voltar, recarregar }: Props) {
 
         <div className="card">
           <h3 className="h3">Custos e recebimentos</h3>
+          {rateados.length > 0 && (
+            <div className="rounded-lg bg-soft px-3 py-2 text-xs text-[#14201e]">
+              Rateio mensal: {rateados.map((k) => `${k.descricao} ${k.rateio.find((r) => r.projeto_id === p.id)?.pct}%`).join(" · ")}
+            </div>
+          )}
           <div>
-            {L.length === 0 && <p className="text-xs text-[#5d6b68]">Cadastre assinaturas (Vercel, Supabase, domínio…), custos únicos e o que já recebeu.</p>}
+            {L.length === 0 && <p className="text-xs text-[#5d6b68]">Custos únicos e recebimentos. Custos mensais ficam na aba Custos mensais.</p>}
             {L.map((l) => (
               <div key={l.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-[#dbe2e0] py-2 first:border-t-0">
                 <div className="min-w-0"><div className="truncate">{l.descricao}</div>
@@ -130,7 +136,7 @@ export default function ProjetoView({ p, L, usd, voltar, recarregar }: Props) {
             ))}
           </div>
           <form onSubmit={addLanc} className="grid grid-cols-2 items-end gap-2 md:grid-cols-3">
-            <label className="lbl">Tipo<select name="tipo" className="inp"><option value="assinatura">Assinatura mensal</option><option value="custo">Custo único</option><option value="receita">Recebimento</option></select></label>
+            <label className="lbl">Tipo<select name="tipo" className="inp"><option value="custo">Custo único</option><option value="receita">Recebimento</option></select></label>
             <label className="lbl">Descrição<input name="descricao" className="inp" required placeholder="Supabase Pro" /></label>
             <label className="lbl">Moeda<select name="moeda" className="inp"><option>BRL</option><option>USD</option></select></label>
             <label className="lbl">Valor<input name="valor" className="inp" type="number" step="0.01" required /></label>

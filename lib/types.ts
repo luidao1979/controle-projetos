@@ -10,3 +10,8 @@ export type Lancamento = {
   id: string; projeto_id: string; tipo: "assinatura" | "custo" | "receita"; descricao: string;
   moeda: "BRL" | "USD"; valor: number; data: string; ativo: boolean; fim: string | null;
 };
+export type Rateio = { projeto_id: string; pct: number };
+export type Custo = {
+  id: string; descricao: string; conta: "Pessoal" | "Lady"; moeda: "BRL" | "USD"; valor: number;
+  data: string; ativo: boolean; fim: string | null; rateio: Rateio[];
+};
